@@ -1,0 +1,27 @@
+[project]
+name = "finagent"
+version = "0.1.0"
+description = "FinAgent - 金融投研助手：多智能体编排 + RAG + 工具调用"
+requires-python = ">=3.10"
+
+dependencies = [
+    # ---- LangChain / LangGraph 生态 ----
+    "langchain-core",
+    "langchain-community",
+    "langchain-milvus>=0.4.0",
+    "langchain-text-splitters",
+    "langchain-deepseek>=1.1.0",
+    "langgraph",
+    # ---- 数据与向量化 ----
+    "akshare",
+    "dashscope>=1.27.0",
+    "pymilvus",
+    # ---- Web 服务 ----
+    "fastapi",
+    "uvicorn",
+    # ---- 配置 ----
+    "pydantic-settings",
+    # ---- 图表 ----
+    "matplotlib",
+    "mplfinance",
+]

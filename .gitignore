@@ -1,0 +1,22 @@
+# 密钥与本地配置
+.env
+
+# Python 缓存与虚拟环境
+__pycache__/
+.venv/
+*.pyc
+
+# 生成的临时文件
+*.tmp
+
+# 生成物与数据（本地生成，不上传）
+output/
+volumes/
+strategies.json
+
+# IDE 与工具配置（个人环境）
+.idea/
+.jbeval/
+
+# 杂项（个人文件）
+目录.txt
