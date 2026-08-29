@@ -1,7 +1,7 @@
 [project]
 name = "finagent"
 version = "0.1.0"
-description = "FinAgent - 金融投研助手：多智能体编排 + RAG + 工具调用"
+description = "FinAgent - 金融投研平台：多智能体编排 + RAG + 回测 + 模拟交易"
 requires-python = ">=3.10"
 
 dependencies = [
@@ -12,6 +12,7 @@ dependencies = [
     "langchain-text-splitters",
     "langchain-deepseek>=1.1.0",
     "langgraph",
+    "langgraph-checkpoint-postgres>=3.0.5",
     # ---- 数据与向量化 ----
     "akshare",
     "dashscope>=1.27.0",
@@ -21,7 +22,24 @@ dependencies = [
     "uvicorn",
     # ---- 配置 ----
     "pydantic-settings",
-    # ---- 图表 ----
+    # ---- 认证（JWT + bcrypt）----
+    "pyjwt>=2.13.0",
+    "bcrypt>=5.0.0",
+    # ---- 数据库（PostgreSQL）----
+    "psycopg[binary,pool]>=3.3.0",
+    # ---- 图表（回测用，前端用 ECharts）----
     "matplotlib",
     "mplfinance",
+    # ---- MCP 工具（天气/地图）----
+    "mcp",
+    "langchain-mcp-adapters>=0.1.0",
+    # ---- LlamaIndex（RAG 增强）----
+    "llama-index",
+    "llama-index-vector-stores-milvus",
+    # ---- 测试 ----
+    "pytest",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

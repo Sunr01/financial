@@ -13,6 +13,9 @@ from finagent.agents.tools import (
 )
 from finagent.agents.chart import generate_kline_chart
 
+_graph_ref = None  # 编译后的图引用（供会话历史查询用）
+_current_stream_handler = None  # 当前流式 handler（线程内传递，绕开 config 序列化）
+
 
 class AgentState(TypedDict):
     """状态：节点间传递的托盘。"""
@@ -22,14 +25,55 @@ class AgentState(TypedDict):
     symbol: str        # 股票代码（LLM 提取）
 
 
-def supervisor_node(state: AgentState) -> dict:
-    """总管节点：用 LLM 提取意图和股票代码，决定路由。"""
-    intent = extract_intent(state["question"])
-    return {"route": intent.intent, "symbol": intent.symbol}
+def supervisor_node(state: AgentState, config=None) -> dict:
+    """总管节点：优先用 config 传入的意图（快速关键词判断），避免 LLM 阻塞。"""
+    global _current_stream_handler
+    # 优先用 server 传入的快速意图（config 里）
+    route = ""
+    if config:
+        route = config.get("configurable", {}).get("quick_intent", "")
+    symbol = state.get("symbol", "")
+    if not route:
+        # 没有快速意图才走 LLM（兜底）
+        history, prev_intent = "", ""
+        try:
+            history, prev_intent = _get_history(config) if config else ("", "")
+        except Exception:
+            history, prev_intent = "", ""
+        intent = extract_intent(state["question"], history, prev_intent)
+        route, symbol = intent.intent, intent.symbol
+    return {"route": route, "symbol": symbol}
 
 
-def rag_node(state: AgentState) -> dict:
-    """RAG 节点：知识库问答（调用真实问答逻辑）。"""
+def _get_history(config) -> tuple:
+    """从 Checkpointer 提取会话历史（上一轮的问题、回答、意图）。"""
+    try:
+        from finagent.agents.supervisor import _graph_ref
+        snapshot = _graph_ref.get_state(config)
+    except Exception:
+        return "", ""
+    vals = snapshot.values
+    prev_q = vals.get("question", "")
+    prev_a = vals.get("answer", "")
+    prev_route = vals.get("route", "")  # 上一轮意图
+    history = f"上次问题：{prev_q} 上次回答：{prev_a}" if prev_q else ""
+    return history, prev_route
+
+
+def rag_node(state: AgentState, config=None) -> dict:
+    """RAG 节点：知识库问答。若有流式 handler（全局）则逐 token 输出。"""
+    global _current_stream_handler
+    from finagent.rag.query import answer_stream
+    handler = _current_stream_handler
+    print(f"[rag_node] handler={'有' if handler else '无'}")  # 临时调试
+    if handler is not None:
+        try:
+            answer_stream(state["question"], handler)
+        except Exception as e:
+            print(f"[rag_node] answer_stream 错误: {type(e).__name__}: {e}")
+        finally:
+            handler.q.put(None)
+        return {"answer": "（流式输出中）"}
     return {"answer": answer(state["question"])}
 
 
@@ -59,8 +103,9 @@ def route_by_intent(state: AgentState) -> str:
     return state.get("route", "rag")
 
 
-def build_graph():
-    """构建并返回编译后的图。"""
+def build_graph(checkpointer=None):
+    """构建并返回编译后的图。checkpointer 为可选的会话持久化器。"""
+    global _graph_ref
     g = StateGraph(AgentState)
     g.add_node("supervisor", supervisor_node)
     g.add_node("rag", rag_node)
@@ -77,7 +122,8 @@ def build_graph():
     g.add_edge("news", END)
     g.add_edge("k_chart", END)
     g.add_edge("report", END)
-    return g.compile()
+    _graph_ref = g.compile(checkpointer=checkpointer)
+    return _graph_ref
 
 
 if __name__ == "__main__":

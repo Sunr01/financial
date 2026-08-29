@@ -40,3 +40,33 @@ services:
     depends_on:
       - etcd
       - minio
+
+  postgres:
+    container_name: finagent-pg
+    image: postgres:16
+    environment:
+      POSTGRES_USER: finagent
+      POSTGRES_PASSWORD: finagent123
+      POSTGRES_DB: finagent
+    ports:
+      - "5432:5432"
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/pg:/var/lib/postgresql/data
+
+  finagent:
+    container_name: finagent-app
+    build: .
+    ports:
+      - "9996:9996"
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      MILVUS_HOST: milvus
+      DB_HOST: postgres
+      DB_USER: finagent
+      DB_PASSWORD: finagent123
+      DB_NAME: finagent
+      SECRET_KEY: ${SECRET_KEY:-finagent-secret-key-change-in-production}
+    depends_on:
+      - milvus
+      - postgres

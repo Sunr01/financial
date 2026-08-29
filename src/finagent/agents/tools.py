@@ -29,7 +29,10 @@ def get_realtime_quote(symbol: str) -> str:
     """获取股票实时行情（新浪源），返回文本。symbol 为 6 位股票代码。"""
     def _fetch():
         df = ak.stock_zh_a_spot()
-        row = df[df["代码"] == _with_prefix(symbol)].iloc[0]
+        matched = df[df["代码"] == _with_prefix(symbol)]
+        if matched.empty:
+            return f"未找到股票 {symbol}，请确认股票代码"
+        row = matched.iloc[0]
         return f"{row['名称']} 最新价 {row['最新价']} 元，涨跌幅 {row['涨跌幅']}%"
     return _retry(_fetch)
 
@@ -43,10 +46,19 @@ def get_kline_data(symbol: str, days: int = 250) -> str:
     return _retry(_fetch)
 
 
+# K线数据缓存（内存级，避免重复请求外部接口）
+_kline_cache: dict = {}
+
+
 def get_kline_df(symbol: str, days: int = 120):
-    """获取K线数据（DataFrame），供图表接口使用。symbol 为 6 位股票代码。"""
-    df = ak.stock_zh_a_hist_tx(symbol=_with_prefix(symbol)).tail(days)
-    return df[["date", "open", "close", "high", "low", "volume"]]
+    """获取K线数据（DataFrame），带内存缓存。symbol 为 6 位股票代码。"""
+    cache_key = symbol
+    if cache_key in _kline_cache:
+        return _kline_cache[cache_key].tail(days)
+    df = ak.stock_zh_a_hist_tx(symbol=_with_prefix(symbol))
+    df = df[["date", "open", "close", "high", "low", "volume"]]
+    _kline_cache[cache_key] = df
+    return df.tail(days)
 
 
 def get_financial_indicators(symbol: str) -> str:

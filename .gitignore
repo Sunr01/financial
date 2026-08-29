@@ -13,6 +13,13 @@ __pycache__/
 output/
 volumes/
 strategies.json
+finagent.db
+
+# 调试脚本（临时，不上传）
+debug_*.py
+
+# 测试缓存
+.pytest_cache/
 
 # IDE 与工具配置（个人环境）
 .idea/

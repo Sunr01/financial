@@ -9,17 +9,56 @@
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="logo">📈 FinAgent</div>
-        <div class="nav-links">
-            <a href="#" data-page="home" class="nav-link active">首页</a>
-            <a href="#" data-page="strategy" class="nav-link">编写策略</a>
-            <a href="#" data-page="data" class="nav-link">数据平台</a>
-            <a href="#" data-page="trade" class="nav-link">我的交易</a>
+    <!-- 登录/注册页 -->
+    <div id="auth-page" class="auth-page" style="display:none">
+        <div class="auth-card">
+            <h2>📈 FinAgent 量化平台</h2>
+            <!-- 登录表单 -->
+            <div id="login-form">
+                <h3>登录</h3>
+                <input id="login-username" placeholder="用户名" autocomplete="username">
+                <input id="login-password" type="password" placeholder="密码" autocomplete="current-password">
+                <button class="btn" onclick="doLogin()">登 录</button>
+                <p class="auth-switch">还没有账号？<a href="#" onclick="showRegister()">去注册</a></p>
+            </div>
+            <!-- 注册表单 -->
+            <div id="register-form" style="display:none">
+                <h3>注册</h3>
+                <input id="reg-username" placeholder="用户名（至少3位）" autocomplete="username">
+                <input id="reg-password" type="password" placeholder="密码（至少6位）" autocomplete="new-password">
+                <button class="btn" onclick="doRegister()">注 册</button>
+                <p class="auth-switch">已有账号？<a href="#" onclick="showLogin()">去登录</a></p>
+            </div>
         </div>
-    </nav>
+    </div>
 
-    <main id="page-container"></main>
+    <!-- 主界面 -->
+    <div id="app-shell" style="display:none">
+        <nav class="navbar">
+            <div class="logo">📈 FinAgent</div>
+            <div class="nav-links">
+                <a href="#" data-page="home" class="nav-link active">首页</a>
+                <a href="#" data-page="strategy" class="nav-link">编写策略</a>
+                <a href="#" data-page="data" class="nav-link">数据平台</a>
+                <a href="#" data-page="trade" class="nav-link">我的交易</a>
+            </div>
+            <div class="nav-user">
+                <span id="nav-username"></span>
+                <button class="btn small" onclick="logout()">退出</button>
+            </div>
+        </nav>
+        <main id="page-container"></main>
+    </div>
+
+    <!-- 风险提示弹窗 -->
+    <div id="risk-modal" class="modal-overlay" style="display:none">
+        <div class="modal">
+            <button class="modal-close" onclick="closeRiskModal()">×</button>
+            <h2>⚠️ 风险提示</h2>
+            <p>理财有风险，梭哈需谨慎</p>
+            <button class="btn" onclick="closeRiskModal()">确认</button>
+        </div>
+    </div>
 
     <script src="/app.js"></script>
 </body>
