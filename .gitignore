@@ -18,6 +18,9 @@ finagent.db
 # 调试脚本（临时，不上传）
 debug_*.py
 
+# 文档（本地私有，不上传）
+/docs/
+
 # 测试缓存
 .pytest_cache/
 
