@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # JWT 密钥
     secret_key: str = "finagent-secret-key-change-in-production"
 
+    # MCP 工具 URL（凭据，放 .env）
+    amap_mcp_url: str = ""
+    weather_mcp_url: str = ""
+
     model_config = SettingsConfigDict(env_file=".env")
 
 
