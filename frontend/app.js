@@ -152,10 +152,9 @@ async function deleteConversation(threadId) {
     loadConversations();
 }
 
-// 隐藏/显示侧栏
+// 隐藏/显示侧栏（按钮在侧栏内，跟着侧栏一起走；收起后由展开条唤起）
 function toggleSidebar() {
-    const sb = document.getElementById("conv-sidebar");
-    sb.style.display = sb.style.display === "none" ? "flex" : "none";
+    document.getElementById("conv-sidebar").classList.toggle("hidden");
 }
 
 // 加载指定会话
@@ -221,7 +220,8 @@ async function sendHomeChat() {
     saveMsg("user", q);
     // 只保留最近 7 轮
     homeChatHistory = homeChatHistory.slice(-14);
-    // 创建机器人消息（流式填充）
+    // 创建机器人消息（打字机流式填充）
+    resetTypeWriter();
     const botDiv = appendHomeMsg("bot", "");
     try {
         const resp = await fetch("/chat", {
@@ -249,15 +249,20 @@ async function sendHomeChat() {
                 if (line.startsWith("data: ")) {
                     const data = line.slice(6);
                     if (data === "[DONE]") continue;
-                    if (data.startsWith("[ERROR]")) { full = data; break; }
+                    if (data.startsWith("[ERROR]")) {
+                        full = data;
+                        resetTypeWriter();
+                        botDiv.textContent = full;
+                        break;
+                    }
                     full += data;
+                    typeAppend(botDiv, box, data);  // 打字机逐字渲染（网络缓冲兜底）
                 }
             }
-            botDiv.textContent = full;
-            box.scrollTop = box.scrollHeight;
         }
         // 无内容 → 移除空机器人消息；话术（超限提示）不存历史
         if (!full.trim()) {
+            resetTypeWriter();
             botDiv.remove();
         } else if (full.includes("我是金融助手")) {
             /* 超限话术不存历史 */
@@ -266,8 +271,33 @@ async function sendHomeChat() {
             saveMsg("assistant", full);
         }
     } catch (e) {
+        resetTypeWriter();
         botDiv.textContent = "出错了：" + e.message;
     }
+}
+
+// ---------- 打字机流式渲染 ----------
+// 后端 SSE 若因网络缓冲一次性到达，这里按字符逐字显示，保证"流式"观感
+let typeBuf = [];
+let typeTimer = null;
+
+function resetTypeWriter() {
+    typeBuf = [];
+    if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
+}
+
+function typeAppend(botDiv, box, text) {
+    for (const ch of text) typeBuf.push(ch);
+    if (typeTimer) return;
+    typeTimer = setInterval(() => {
+        let batch = "";
+        while (batch.length < 6 && typeBuf.length) batch += typeBuf.shift();
+        if (batch) {
+            botDiv.textContent += batch;
+            if (box) box.scrollTop = box.scrollHeight;
+        }
+        if (!typeBuf.length) { clearInterval(typeTimer); typeTimer = null; }
+    }, 25);
 }
 
 function appendHomeMsg(role, text) {
@@ -278,6 +308,13 @@ function appendHomeMsg(role, text) {
     box.appendChild(div);
     box.scrollTop = box.scrollHeight;
     return div;
+}
+
+// 推荐策略快捷输入：点击 → 自动填入输入框并发送
+function useQuickPrompt(text) {
+    const input = document.getElementById("home-chat-input");
+    if (input) input.value = text;
+    sendHomeChat();
 }
 
 // 回车发送
@@ -368,13 +405,17 @@ const pages = {
                         <div class="chat-layout">
                             <!-- 会话侧栏（可隐藏）-->
                             <div class="conv-sidebar" id="conv-sidebar">
-                                <button class="btn conv-new" onclick="newConversation()">＋ 新建对话</button>
+                                <div class="conv-sidebar-head">
+                                    <button class="btn conv-new" onclick="newConversation()">＋ 新建对话</button>
+                                    <button class="btn small conv-collapse" onclick="toggleSidebar()" title="收起会话列表">☰</button>
+                                </div>
                                 <div class="conv-list" id="conv-list"></div>
                             </div>
+                            <!-- 侧栏收起后的展开条（跟着侧栏走）-->
+                            <button class="conv-toggle-collapsed" onclick="toggleSidebar()" title="展开会话列表">☰</button>
                             <!-- 聊天区 -->
                             <div class="chat-main">
                                 <div class="chat-header">
-                                    <button class="btn small" onclick="toggleSidebar()">☰</button>
                                     <h2>💬 AI 智能对话</h2>
                                 </div>
                                 <div class="chat-window" id="home-chat-box">
@@ -383,6 +424,13 @@ const pages = {
                                 <div class="chat-input-bar">
                                     <input id="home-chat-input" placeholder="输入问题，如：均线策略是什么？" autocomplete="off">
                                     <button class="btn" onclick="sendHomeChat()">发送</button>
+                                </div>
+                                <div class="chat-quick-row">
+                                    <span class="chat-quick-label">推荐策略</span>
+                                    <button class="chat-quick-chip" onclick="useQuickPrompt('请介绍一下均线策略的功能和使用方法')">📈 均线策略</button>
+                                    <button class="chat-quick-chip" onclick="useQuickPrompt('请介绍一下网格策略的功能和使用方法')">📊 网格策略</button>
+                                    <button class="chat-quick-chip" onclick="useQuickPrompt('请介绍一下动量策略的功能和使用方法')">🚀 动量策略</button>
+                                    <button class="chat-quick-chip" onclick="useQuickPrompt('请介绍一下成长因子策略的功能和使用方法')">🌱 成长因子策略</button>
                                 </div>
                             </div>
                         </div>
@@ -462,6 +510,34 @@ const pages = {
                 </div>
                 <div id="data-result" style="margin-top:16px"></div>
             </div>
+            <div class="card" style="margin-top:20px">
+                <div class="stock-bar">
+                    <h2 style="margin:0">📊 股市行情（A股）</h2>
+                    <div class="stock-bar-right">
+                        <input id="stock-keyword" placeholder="代码/名称筛选" style="width:140px"
+                               onkeydown="if(event.key==='Enter')loadStockTable(1)">
+                        <button class="btn small" onclick="loadStockTable(1)">筛选</button>
+                        <button class="btn small" onclick="refreshStocks()">🔄 刷新</button>
+                    </div>
+                </div>
+                <div class="industry-bar" id="industry-bar"><span style="color:#888;font-size:12px">行业加载中...</span></div>
+                <table class="stock-table" id="stock-table">
+                    <thead>
+                        <tr>
+                            <th>代码</th><th>名称</th>
+                            <th class="sortable" onclick="toggleSort('最新价')">最新价 <span class="sort-arrow" data-col="最新价">⇅</span></th>
+                            <th class="sortable" onclick="toggleSort('涨跌幅')">涨跌幅 <span class="sort-arrow" data-col="涨跌幅">⇅</span></th>
+                            <th class="sortable" onclick="toggleSort('换手率')">换手率 <span class="sort-arrow" data-col="换手率">⇅</span></th>
+                            <th class="sortable" onclick="toggleSort('成交额')">成交额(亿) <span class="sort-arrow" data-col="成交额">⇅</span></th>
+                            <th class="sortable" onclick="toggleSort('总市值')">总市值(亿) <span class="sort-arrow" data-col="总市值">⇅</span></th>
+                            <th class="sortable" onclick="toggleSort('市盈率-动态')">市盈率 <span class="sort-arrow" data-col="市盈率-动态">⇅</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="stock-tbody"><tr><td colspan="8" style="text-align:center;color:#888">加载中...</td></tr></tbody>
+                </table>
+                <div class="stock-pager" id="stock-pager"></div>
+                <p style="color:#999;font-size:12px;margin-top:8px">💡 点击行可将代码填入上方输入框；数据来自东方财富全市场快照，刷新后 5 分钟内复用缓存</p>
+            </div>
         </div>`,
 
     trade: `
@@ -520,7 +596,7 @@ function navigate(page) {
     container.innerHTML = pages[page];
     document.getElementById("page-" + page).classList.add("active");
     if (page === "trade") initTrade();
-    if (page === "data") { /* 数据平台：不自动加载，由用户点按钮触发 */ }
+    if (page === "data") { loadStockTable(1); loadIndustries(); }  // 数据平台：自动加载股市行情 + 行业分类
     if (page === "strategy") { loadStrategyList(); loadTemplates(); }
     if (page === "home") { initHomeChat(); }}
 
@@ -582,46 +658,57 @@ function renderKline(elId, klineData) {
 
 // ---------- 收益曲线图（策略 vs 基准）----------
 function renderReturnsChart(elId, data) {
-    if (typeof echarts === "undefined") {
-        document.getElementById(elId).innerHTML = '<p style="color:#f85149">ECharts 加载失败</p>';
+    const box = document.getElementById(elId);
+    if (!data || !Array.isArray(data.strategy_returns) || data.strategy_returns.length === 0) {
+        box.innerHTML = '<p style="color:#f85149">无回测数据（数据源可能不可用）</p>';
         return;
     }
-    const chart = echarts.init(document.getElementById(elId));
-    // 相对收益率 = 策略收益 - 基准收益
-    const relReturns = data.strategy_returns.map((v, i) =>
-        v - (data.benchmark_returns[i] || 0)
-    );
-    // 回撤区间标注（markArea）
-    const dd = data.max_drawdown || {};
-    const markArea = (dd.start && dd.end) ? [{
-        name: "最大回撤区间",
-        xAxis: dd.start,
-        itemStyle: { color: "rgba(248,81,73,0.08)" },
-    }, {
-        xAxis: dd.end,
-    }] : [];
-    const option = {
-        backgroundColor: "transparent",
-        tooltip: { trigger: "axis", valueFormatter: (v) => v + "%" },
-        legend: { data: ["策略收益", "基准收益", "相对收益率"], textStyle: { color: "#8b949e" } },
-        grid: { left: 60, right: 30, top: 30, bottom: 50 },
-        xAxis: { type: "category", data: data.dates, axisLabel: { color: "#8b949e" }, axisLine: { lineStyle: { color: "#30363d" } } },
-        yAxis: { type: "value", axisLabel: { formatter: "{value}%", color: "#8b949e" }, splitLine: { lineStyle: { color: "#21262d" } } },
-        dataZoom: [
-            { type: "inside", start: 0, end: 100 },
-            { type: "slider", bottom: 0, start: 0, end: 100 },
-        ],
-        series: [
-            { name: "策略收益", type: "line", data: data.strategy_returns, showSymbol: false, smooth: true,
-              lineStyle: { width: 2, color: "#f85149" }, areaStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: "rgba(248,81,73,0.25)" }, { offset: 1, color: "rgba(248,81,73,0)" }] } } },
-            { name: "基准收益", type: "line", data: data.benchmark_returns, showSymbol: false, smooth: true,
-              lineStyle: { width: 2, color: "#ffb301" } },
-            { name: "相对收益率", type: "line", data: relReturns, showSymbol: false, smooth: true,
-              lineStyle: { width: 2, color: "#58a6ff" }, markArea: { data: markArea } },
-        ],
-    };
-    chart.setOption(option);
-    window.addEventListener("resize", () => chart.resize());
+    if (typeof echarts === "undefined") {
+        box.innerHTML = '<p style="color:#f85149">ECharts 加载失败</p>';
+        return;
+    }
+    try {
+        const chart = echarts.init(box);
+        // 相对收益率 = 策略收益 - 基准收益
+        const relReturns = data.strategy_returns.map((v, i) =>
+            v - (data.benchmark_returns[i] || 0)
+        );
+        // 回撤区间标注（markArea）：只在起止日期都能在 X 轴找到时才绘制（防 coord 报错）
+        const dd = data.max_drawdown || {};
+        const startIdx = data.dates.indexOf(dd.start);
+        const endIdx = data.dates.indexOf(dd.end);
+        const markArea = (startIdx >= 0 && endIdx >= 0) ? [{
+            name: "最大回撤区间",
+            xAxis: startIdx,
+            itemStyle: { color: "rgba(248,81,73,0.08)" },
+        }, {
+            xAxis: endIdx,
+        }] : [];
+        const option = {
+            backgroundColor: "transparent",
+            tooltip: { trigger: "axis", valueFormatter: (v) => v + "%" },
+            legend: { data: ["策略收益", "基准收益", "相对收益率"], textStyle: { color: "#8b949e" } },
+            grid: { left: 60, right: 30, top: 30, bottom: 50 },
+            xAxis: { type: "category", data: data.dates, axisLabel: { color: "#8b949e" }, axisLine: { lineStyle: { color: "#30363d" } } },
+            yAxis: { type: "value", axisLabel: { formatter: "{value}%", color: "#8b949e" }, splitLine: { lineStyle: { color: "#21262d" } } },
+            dataZoom: [
+                { type: "inside", start: 0, end: 100 },
+                { type: "slider", bottom: 0, start: 0, end: 100 },
+            ],
+            series: [
+                { name: "策略收益", type: "line", data: data.strategy_returns, showSymbol: false, smooth: true,
+                  lineStyle: { width: 2, color: "#f85149" }, areaStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: "rgba(248,81,73,0.25)" }, { offset: 1, color: "rgba(248,81,73,0)" }] } } },
+                { name: "基准收益", type: "line", data: data.benchmark_returns, showSymbol: false, smooth: true,
+                  lineStyle: { width: 2, color: "#ffb301" } },
+                { name: "相对收益率", type: "line", data: relReturns, showSymbol: false, smooth: true,
+                  lineStyle: { width: 2, color: "#58a6ff" }, markArea: { data: markArea } },
+            ],
+        };
+        chart.setOption(option);
+        window.addEventListener("resize", () => chart.resize());
+    } catch (e) {
+        box.innerHTML = '<p style="color:#f85149">图表渲染失败：' + e.message + '</p>';
+    }
 }
 
 // ---------- 数据平台 ----------
@@ -629,6 +716,185 @@ function setActiveTab(id) {
     document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
     const btn = document.getElementById(id);
     if (btn) btn.classList.add("active");
+}
+
+// ---------- 股市行情列表（分页 + 行业分类 + 表头排序）----------
+let stockPages = 1;
+let currentIndustry = "";   // "" = 全部市场
+let stockSort = { by: "", order: "desc" };   // 表头排序状态
+
+// 点击表头三态循环：1 降序 → 2 升序 → 3 不排序（恢复默认顺序）→ 回到 1
+function toggleSort(col) {
+    if (stockSort.by !== col) {
+        // 切到新列：默认降序
+        stockSort.by = col;
+        stockSort.order = "desc";
+    } else if (stockSort.order === "desc") {
+        // 同一列第 2 次：升序
+        stockSort.order = "asc";
+    } else {
+        // 同一列第 3 次：取消排序，恢复默认顺序
+        stockSort.by = "";
+        stockSort.order = "desc";
+    }
+    loadStockTable(1);
+}
+
+function renderSortArrows() {
+    // 箭头风格统一（线条箭头）：未排序 ⇅，降序 ↓，升序 ↑，仅高亮激活列
+    document.querySelectorAll(".stock-table th.sortable").forEach(th => {
+        const arrow = th.querySelector(".sort-arrow");
+        const col = arrow ? arrow.dataset.col : "";
+        const active = (stockSort.by === col);
+        arrow.textContent = active ? (stockSort.order === "asc" ? "↑" : "↓") : "⇅";
+        th.classList.toggle("sorted", active);
+    });
+}
+
+function fmtNum(v) {
+    return (v === null || v === undefined || v === "") ? "-" : Number(v).toFixed(2);
+}
+function fmtPct(v) {
+    return (v === null || v === undefined || v === "") ? "-"
+        : (Number(v) > 0 ? "+" : "") + Number(v).toFixed(2) + "%";
+}
+function fmtYi(v) {
+    return (v === null || v === undefined || v === "") ? "-" : (Number(v) / 1e8).toFixed(1);
+}
+
+// 行业分类：点击行业 → 加载该行业成分股
+async function loadIndustries() {
+    const bar = document.getElementById("industry-bar");
+    if (!bar) return;
+    try {
+        const resp = await apiFetch("/api/stocks/industries");
+        const data = await resp.json();
+        if (data.error) {
+            bar.innerHTML = `<span style="color:#f85149;font-size:12px">行业加载失败：${data.error}</span>`;
+            return;
+        }
+        bar.innerHTML = '<button class="ind-chip active" onclick="selectIndustry(\'\')">全部</button>' +
+            (data.industries || []).map(n =>
+                `<button class="ind-chip" onclick="selectIndustry('${String(n).replace(/'/g, "\\'")}')">${n}</button>`
+            ).join("");
+    } catch (e) {
+        bar.innerHTML = `<span style="color:#f85149;font-size:12px">行业加载失败：${e.message}</span>`;
+    }
+}
+
+function selectIndustry(name) {
+    currentIndustry = name;
+    document.querySelectorAll(".ind-chip").forEach(b =>
+        b.classList.toggle("active", b.textContent === (name || "全部")));
+    loadStockTable(1);
+}
+
+// ---------- 股票详情弹窗：点击行情行弹出，显示行情摘要 + K线 ----------
+async function showStockDetail(code, name) {
+    document.getElementById("stock-modal-title").textContent = `${name}（${code}）`;
+    document.getElementById("stock-modal-quote").innerHTML = '<span style="color:#888">行情加载中...</span>';
+    document.getElementById("stock-modal-chart").innerHTML = '';
+    document.getElementById("stock-modal").style.display = "flex";
+    try {
+        // 并行拉实时行情 + K线
+        const [qResp, kResp] = await Promise.all([
+            apiFetch(`/api/quote?symbol=${code}`),
+            apiFetch(`/api/kline?symbol=${code}`),
+        ]);
+        const q = await qResp.json();
+        const k = await kResp.json();
+        let pct = parseFloat(q.change_pct);
+        if (isNaN(pct)) pct = 0;
+        document.getElementById("stock-modal-quote").innerHTML = `
+            <div class="q-item"><span class="q-label">最新价</span><span class="q-value">${q.price || "-"}</span></div>
+            <div class="q-item"><span class="q-label">涨跌幅</span><span class="q-value ${pct >= 0 ? 'up' : 'down'}">${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%</span></div>
+            <div class="q-item"><span class="q-label">股票名称</span><span class="q-value">${q.name || name}</span></div>
+            <div class="q-item"><span class="q-label">代码</span><span class="q-value">${q.symbol || code}</span></div>`;
+        renderKline("stock-modal-chart", k);
+    } catch (e) {
+        document.getElementById("stock-modal-quote").innerHTML =
+            `<span style="color:#f85149">加载失败：${e.message}</span>`;
+    }
+}
+
+function closeStockModal() {
+    document.getElementById("stock-modal").style.display = "none";
+}
+
+async function loadStockTable(page = 1) {
+    const kwInput = document.getElementById("stock-keyword");
+    const kw = kwInput ? kwInput.value.trim() : "";
+    const tbody = document.getElementById("stock-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888">加载中...</td></tr>';
+    renderSortArrows();
+    const sortParam = stockSort.by ? `&sort_by=${stockSort.by}&sort_order=${stockSort.order}` : "";
+    try {
+        let data;
+        if (currentIndustry) {
+            const resp = await apiFetch(`/api/stocks/industry?name=${encodeURIComponent(currentIndustry)}&page=${page}&page_size=20${sortParam}`);
+            data = await resp.json();
+        } else {
+            const resp = await apiFetch(`/api/stocks?page=${page}&page_size=20&keyword=${encodeURIComponent(kw)}${sortParam}`);
+            data = await resp.json();
+        }
+        if (data.error) {
+            tbody.innerHTML = `<tr><td colspan="8" style="color:#f85149">${data.error}</td></tr>`;
+            return;
+        }
+        // 行业视图下 keyword 在当页内过滤
+        let items = data.items || [];
+        if (currentIndustry && kw) {
+            items = items.filter(s => String(s["代码"]).includes(kw) || String(s["名称"]).includes(kw));
+        }
+        stockPages = data.pages;
+        tbody.innerHTML = items.length ? items.map(s => `
+            <tr onclick="showStockDetail('${s["代码"]}','${String(s["名称"]).replace(/'/g, "\\'")}')" title="点击查看K线">
+                <td>${s["代码"]}</td>
+                <td style="text-align:left">${s["名称"]}</td>
+                <td>${fmtNum(s["最新价"])}</td>
+                <td class="${Number(s["涨跌幅"]) >= 0 ? 'up' : 'down'}">${fmtPct(s["涨跌幅"])}</td>
+                <td>${fmtPct(s["换手率"])}</td>
+                <td>${fmtYi(s["成交额"])}</td>
+                <td>${fmtYi(s["总市值"])}</td>
+                <td>${fmtNum(s["市盈率-动态"])}</td>
+            </tr>`).join("")
+            : '<tr><td colspan="8" style="text-align:center;color:#888">无匹配数据</td></tr>';
+        renderStockPager(data);
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="8" style="color:#f85149">加载失败：${e.message}</td></tr>`;
+    }
+}
+
+function renderStockPager(data) {
+    const p = document.getElementById("stock-pager");
+    if (!p) return;
+    p.innerHTML = `
+        <button class="btn small" ${data.page <= 1 ? 'disabled' : ''} onclick="loadStockTable(${data.page - 1})">上一页</button>
+        <span style="color:#666;font-size:13px">第 <input id="stock-goto" type="number" min="1" max="${data.pages}"
+            value="${data.page}" style="width:52px"> / ${data.pages} 页，共 ${data.total} 条</span>
+        <button class="btn small" ${data.page >= data.pages ? 'disabled' : ''} onclick="loadStockTable(${data.page + 1})">下一页</button>
+        <button class="btn small" onclick="gotoStockPage()">跳转</button>`;
+}
+
+function gotoStockPage() {
+    const v = parseInt(document.getElementById("stock-goto").value, 10);
+    if (v >= 1 && v <= stockPages) loadStockTable(v);
+}
+
+async function refreshStocks() {
+    const tbody = document.getElementById("stock-tbody");
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888">正在拉取全市场数据...</td></tr>';
+    try {
+        const resp = await apiFetch("/api/stocks?page=1&page_size=20&refresh=true");
+        const data = await resp.json();
+        if (data.error) {
+            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="color:#f85149">${data.error}</td></tr>`;
+            return;
+        }
+        loadIndustries();
+        loadStockTable(1);  // 按当前视图（全部/行业）重新渲染第一页
+    } catch (e) { /* 忽略，loadStockTable 会再提示 */ }
 }
 
 async function loadQuote() {
@@ -668,6 +934,7 @@ async function runBacktest() {
     try {
         const resp = await apiFetch(`/api/backtest?symbol=${symbol}&benchmark=${benchmark}`);
         const data = await resp.json();
+        if (data.error) { box.innerHTML = `<p style="color:#f85149">${data.error}</p>`; return; }
         renderReturnsChart("bt-chart", data);
         // 指标卡片
         const dd = data.max_drawdown || {};
@@ -708,6 +975,7 @@ async function runMultiBacktest() {
     try {
         const resp = await apiFetch(`/api/backtest/multi?stocks=${encodeURIComponent(stocks)}&hold_num=${hold}&factor=${factor}&benchmark=${benchmark}`);
         const data = await resp.json();
+        if (data.error) { box.innerHTML = `<p style="color:#f85149">${data.error}</p>`; return; }
         box.innerHTML = '<div id="bt-metrics" style="margin-bottom:12px"></div><div id="bt-chart" style="width:100%;height:400px"></div><div id="bt-trades" style="margin-top:12px"></div>';
         renderReturnsChart("bt-chart", data);
         const dd = data.max_drawdown || {};

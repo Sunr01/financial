@@ -18,7 +18,7 @@ def build_vector_store(docs_dir: Path) -> Milvus:
     store = Milvus.from_documents(
         documents=chunks,
         embedding=embeddings,
-        connection_args={"host": settings.milvus_host, "port": settings.milvus_port},
+        connection_args={"uri": f"http://{settings.milvus_host}:{settings.milvus_port}"},
         collection_name="fin_docs",
     )
     print(f"已入库 {len(chunks)} 个文本块到 Milvus collection 'fin_docs'")

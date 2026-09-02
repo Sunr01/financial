@@ -1,0 +1,31 @@
+# 密钥与本地配置
+.env
+
+# Python 缓存与虚拟环境
+__pycache__/
+.venv/
+*.pyc
+.pytest_cache/
+
+# Git 与 IDE
+.git/
+.idea/
+.jbeval/
+
+# 生成物与本地数据（容器内用卷挂载，不进镜像）
+output/
+volumes/
+strategies.json
+finagent.db
+
+# 调试脚本（临时）
+debug_*.py
+
+# 文档（本地私有；知识库通过卷挂载进容器）
+docs/
+
+# 杂项
+目录.txt
+uv.lock
+Dockerfile
+docker-compose.yml

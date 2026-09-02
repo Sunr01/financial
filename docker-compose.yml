@@ -9,6 +9,19 @@ services:
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/etcd:/etcd
     command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   minio:
     container_name: milvus-minio
@@ -21,9 +34,17 @@ services:
     command: minio server /minio_data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   milvus:
     container_name: milvus-standalone-1
@@ -35,38 +56,103 @@ services:
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
     ports:
-      - "19530:19530"
-      - "9091:9091"
+      # 只绑定本机回环,外部网络不可访问
+      - "127.0.0.1:19530:19530"
+      - "127.0.0.1:9091:9091"
     depends_on:
-      - etcd
-      - minio
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    mem_limit: 4g
+    cpus: 2.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   postgres:
     container_name: finagent-pg
     image: postgres:16
     environment:
       POSTGRES_USER: finagent
-      POSTGRES_PASSWORD: finagent123
+      # 密码强制从 .env 注入,未设置则启动失败(不再用默认值)
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 未设置,请在 .env 中配置强密码}
       POSTGRES_DB: finagent
     ports:
-      - "5432:5432"
+      # 只绑定本机回环
+      - "127.0.0.1:5432:5432"
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finagent -d finagent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   finagent:
     container_name: finagent-app
+    image: finagent:latest
     build: .
     ports:
-      - "9996:9996"
+      - "127.0.0.1:9997:9997"
     environment:
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
-      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      # LLM / Embedding 凭据（从宿主机 .env 注入，不进镜像）
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY 未设置}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:?DASHSCOPE_API_KEY 未设置}
+      DASHSCOPE_EMBEDDING_MODEL: ${DASHSCOPE_EMBEDDING_MODEL:-text-embedding-v3}
+      # JWT 密钥:强制从 .env 注入,未设置则启动失败
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY 未设置,请在 .env 中配置强随机密钥}
+      # 容器内互通地址（容器名）
       MILVUS_HOST: milvus
+      MILVUS_PORT: 19530
       DB_HOST: postgres
+      DB_PORT: 5432
       DB_USER: finagent
-      DB_PASSWORD: finagent123
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 未设置}
       DB_NAME: finagent
-      SECRET_KEY: ${SECRET_KEY:-finagent-secret-key-change-in-production}
+      # MCP 工具凭据（可选）
+      AMAP_MCP_URL: ${AMAP_MCP_URL:-}
+      WEATHER_MCP_URL: ${WEATHER_MCP_URL:-}
+    volumes:
+      # 知识库文档（本地私有，挂载只读进容器；首次需执行入库命令，见部署文档）
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/docs/knowledge:/app/docs/knowledge:ro
+      # 生成的图表等输出持久化（entrypoint 会 chown 给 appuser）
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/output:/app/output
     depends_on:
-      - milvus
-      - postgres
+      milvus:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9997/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+    mem_limit: 2g
+    cpus: 2.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

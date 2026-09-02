@@ -18,6 +18,7 @@ def generate_report(topic: str) -> str:
         api_key=settings.deepseek_api_key,
         base_url=settings.deepseek_base_url,
         model=settings.deepseek_model,
+        extra_body={"thinking": {"type": "disabled"}},  # 关闭思考，加快输出
     )
     chain = prompt | llm
     return chain.invoke({"topic": topic}).content

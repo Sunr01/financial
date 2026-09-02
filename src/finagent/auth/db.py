@@ -13,9 +13,14 @@ def get_conninfo() -> str:
             f"password={settings.db_password}")
 
 
+# 连接超时（秒）：本机无 PostgreSQL 时快速失败并给出提示，避免无限挂起
+CONNECT_TIMEOUT = 10
+
+
 def get_conn() -> psycopg.Connection:
-    """获取数据库连接（dict 行工厂）。"""
-    return psycopg.connect(get_conninfo(), row_factory=dict_row)
+    """获取数据库连接（dict 行工厂）。带连接超时，PG 不可用时不挂起。"""
+    return psycopg.connect(get_conninfo(), row_factory=dict_row,
+                           connect_timeout=CONNECT_TIMEOUT)
 
 
 def init_db() -> None:
@@ -58,6 +63,32 @@ def init_db() -> None:
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW(),
                 UNIQUE(username, thread_id)
+            )
+        """)
+        # 交易流水表（模拟交易历史，按用户查询）
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS trades (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                symbol VARCHAR(20) NOT NULL,
+                name VARCHAR(50) DEFAULT '',
+                side VARCHAR(10) NOT NULL,
+                qty INT NOT NULL,
+                price NUMERIC(12, 4) NOT NULL,
+                fee NUMERIC(12, 4) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_trades_username
+            ON trades (username, created_at DESC)
+        """)
+        # 知识库同步状态（记录已入库的文档指纹，用于自动刷新）
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS knowledge_sync (
+                id SERIAL PRIMARY KEY,
+                docs_signature VARCHAR(64) NOT NULL,
+                updated_at TIMESTAMP DEFAULT NOW()
             )
         """)
 

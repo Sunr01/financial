@@ -26,6 +26,9 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
     username = decode_token(token)
     if not username:
         raise HTTPException(status_code=401, detail="无效或过期的 token")
+    # 注销后旧 token 立即失效（JWT 无状态，需查库确认用户仍存在）
+    if not db.user_exists(username):
+        raise HTTPException(status_code=401, detail="用户不存在或已注销")
     return username
 
 

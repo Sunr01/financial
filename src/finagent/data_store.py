@@ -68,6 +68,119 @@ def set_current_strategy(username: str, strategy: dict) -> None:
     save_account_data(username, data)
 
 
+# ---------- 策略运行状态（持久化，容器重启可恢复） ----------
+def set_strategy_running(username: str, running: bool) -> None:
+    """设置策略运行状态（存入 PG，不再依赖内存）。"""
+    data = get_account_data(username) or {}
+    data["strategy_running"] = running
+    save_account_data(username, data)
+
+
+def get_strategy_running(username: str) -> bool:
+    """获取策略运行状态。"""
+    data = get_account_data(username)
+    return bool(data and data.get("strategy_running"))
+
+
+def get_all_running_users() -> list:
+    """获取所有策略运行中的用户（供后台调度器轮询）。"""
+    with get_conn() as conn:
+        rows = conn.execute("SELECT username, data FROM user_accounts").fetchall()
+        return [
+            r["username"] for r in rows
+            if r["data"] and r["data"].get("strategy_running")
+        ]
+
+
+# ---------- 交易流水 ----------
+def record_trades(username: str, trades: list) -> None:
+    """批量写入交易流水（每笔: symbol/name/side/qty/price/fee）。"""
+    if not trades:
+        return
+    with get_conn() as conn:
+        for t in trades:
+            conn.execute(
+                """INSERT INTO trades (username, symbol, name, side, qty, price, fee)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                (username, t["symbol"], t.get("name", ""), t["side"],
+                 t["qty"], t["price"], t.get("fee", 0)),
+            )
+
+
+def list_trades(username: str, limit: int = 50) -> list:
+    """获取用户交易流水（按时间倒序）。"""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, symbol, name, side, qty, price, fee, created_at "
+            "FROM trades WHERE username = %s ORDER BY id DESC LIMIT %s",
+            (username, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ---------- 知识库同步状态（自动刷新用） ----------
+def get_knowledge_signature() -> str | None:
+    """获取已入库的知识库指纹（文档签名）。"""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT docs_signature FROM knowledge_sync ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return row["docs_signature"] if row else None
+
+
+def save_knowledge_signature(signature: str) -> None:
+    """记录知识库已入库的指纹（新指纹插入）。"""
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO knowledge_sync (docs_signature) VALUES (%s)",
+            (signature,),
+        )
+
+
+# ---------- 用户数据导出/删除（合规） ----------
+def export_user_data(username: str) -> dict:
+    """导出用户全部数据（账户/策略/会话/交易流水）。"""
+    with get_conn() as conn:
+        user = conn.execute(
+            "SELECT username, created_at FROM users WHERE username = %s",
+            (username,),
+        ).fetchone()
+        account = conn.execute(
+            "SELECT data FROM user_accounts WHERE username = %s",
+            (username,),
+        ).fetchone()
+        strategies = conn.execute(
+            "SELECT id, name, symbol, capital, code, rule, created_at "
+            "FROM user_strategies WHERE username = %s ORDER BY id",
+            (username,),
+        ).fetchall()
+        convs = conn.execute(
+            "SELECT id, thread_id, title, messages, created_at, updated_at "
+            "FROM conversations WHERE username = %s ORDER BY id",
+            (username,),
+        ).fetchall()
+        trades = conn.execute(
+            "SELECT id, symbol, name, side, qty, price, fee, created_at "
+            "FROM trades WHERE username = %s ORDER BY id",
+            (username,),
+        ).fetchall()
+        return {
+            "user": dict(user) if user else None,
+            "account": account["data"] if account else None,
+            "strategies": [dict(r) for r in strategies],
+            "conversations": [dict(r) for r in convs],
+            "trades": [dict(r) for r in trades],
+        }
+
+
+def delete_user_data(username: str) -> None:
+    """删除用户全部数据（用户/账户/策略/会话/交易流水，级联）。"""
+    with get_conn() as conn:
+        for table in ("trades", "conversations", "user_strategies",
+                      "user_accounts", "users"):
+            conn.execute(f"DELETE FROM {table} WHERE username = %s", (username,))
+
+
 # ---------- 会话管理 ----------
 def list_conversations(username: str) -> list:
     """获取用户会话列表（按更新时间倒序）。"""

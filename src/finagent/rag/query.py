@@ -16,7 +16,7 @@ def get_store() -> Milvus:
     )
     return Milvus(
         embedding_function=embeddings,
-        connection_args={"host": settings.milvus_host, "port": settings.milvus_port},
+        connection_args={"uri": f"http://{settings.milvus_host}:{settings.milvus_port}"},
         collection_name="fin_docs",
     )
 
@@ -39,6 +39,7 @@ def answer(question: str) -> str:
         api_key=settings.deepseek_api_key,
         base_url=settings.deepseek_base_url,
         model=settings.deepseek_model,
+        extra_body={"thinking": {"type": "disabled"}},  # 关闭思考，保证流式正文
     )
     chain = prompt | llm
     return chain.invoke({"context": context, "question": question}).content
@@ -62,6 +63,7 @@ def answer_stream(question: str, handler) -> None:
         api_key=settings.deepseek_api_key,
         base_url=settings.deepseek_base_url,
         model=settings.deepseek_model,
+        extra_body={"thinking": {"type": "disabled"}},  # 关闭思考，保证流式正文
         callbacks=[handler],  # 绑定流式回调
     )
     chain = prompt | llm

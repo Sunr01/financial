@@ -6,7 +6,8 @@ from langchain_deepseek import ChatDeepSeek
 from finagent.config import settings
 
 # 意图分类：market=行情 news=新闻 k_chart=K线图表 report=投研简报 rag=知识库问答
-VALID_INTENTS = {"market", "news", "k_chart", "report", "rag"}
+#           strategy=策略讲解 stock=股票内容总览
+VALID_INTENTS = {"market", "news", "k_chart", "report", "rag", "strategy", "stock"}
 
 
 class Intent(BaseModel):

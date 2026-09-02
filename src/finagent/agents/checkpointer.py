@@ -19,7 +19,8 @@ _checkpointer: PostgresSaver | None = None
 
 
 def get_checkpointer() -> PostgresSaver:
-    """获取（惰性初始化）Checkpointer（同步版，Windows 兼容）。"""
+    """获取（惰性初始化）Checkpointer（同步版，Windows 兼容）。
+    连接带超时：PG 不可用时不无限挂起，抛异常由调用方降级。"""
     global _pool, _checkpointer
     if _checkpointer is None:
         _pool = ConnectionPool(
@@ -30,11 +31,12 @@ def get_checkpointer() -> PostgresSaver:
                 "autocommit": True,
                 "prepare_threshold": 0,
                 "row_factory": dict_row,
+                "connect_timeout": 10,
             },
             open=False,
         )
         _pool.open()
-        _pool.wait()
+        _pool.wait(timeout=15)  # 15 秒内建连失败则抛 TimeoutError
         _checkpointer = PostgresSaver(_pool)
         _checkpointer.setup()  # 自动建表（幂等）
     return _checkpointer

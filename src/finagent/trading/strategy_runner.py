@@ -6,15 +6,20 @@ from finagent.trading.account import Account
 
 
 def run_strategy(account: Account, symbol: str, rule: dict) -> str:
-    """执行一次策略检查：判断当前是否该买/卖，并执行到账户。"""
+    """执行一次策略检查：先处理止损，再判断当前是否该买/卖，并执行到账户。"""
     df = get_kline_df(symbol, 60)
     df = df.reset_index(drop=True)
     row = df.iloc[-1]  # 最新一天
     price = float(row["close"])
 
-    # 判断持仓状态（从账户取）
+    # 1) 止损优先：持仓亏损超阈值直接强平（含 account.sell 的手续费/滑点）
     pos = account.positions.get(symbol)
     holding = pos is not None and pos.qty > 0
+    if holding and pos.cost > 0:
+        loss_pct = (price - pos.cost) / pos.cost
+        if loss_pct <= -account.stop_loss_pct:
+            msg = account.sell(symbol, pos.qty, price)
+            return f"[止损] {msg}（亏损 {loss_pct:.1%} 触发止损线）"
 
     if not holding and _should_buy(rule, df, row, price, 0.0):
         cash = account.cash

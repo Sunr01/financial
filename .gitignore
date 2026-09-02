@@ -17,6 +17,7 @@ finagent.db
 
 # 调试脚本（临时，不上传）
 debug_*.py
+direct_proxy.py
 
 # 文档（本地私有，不上传）
 /docs/
@@ -30,3 +31,6 @@ debug_*.py
 
 # 杂项（个人文件）
 目录.txt
+
+# 备份目录(生成物)
+backups/

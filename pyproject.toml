@@ -33,9 +33,12 @@ dependencies = [
     # ---- MCP 工具（天气/地图）----
     "mcp",
     "langchain-mcp-adapters>=0.1.0",
-    # ---- LlamaIndex（RAG 增强）----
-    "llama-index",
-    "llama-index-vector-stores-milvus",
+    # 注：LlamaIndex 双轨(rag/llama_rag.py)暂未接入主线,依赖已从默认依赖移除。
+    # 原因:langchain-milvus>=0.4.0 要求 pymilvus>=3,而 llama-index-vector-stores-milvus
+    # 元数据锁 pymilvus<3,uv 严格解析下无解(之前 Dockerfile 用 pip --no-deps 绕过,
+    # 仅对 pip 有效)。待其支持 pymilvus 3 后再加回:
+    #   "llama-index",
+    #   "llama-index-vector-stores-milvus",
     # ---- 测试 ----
     "pytest",
 ]

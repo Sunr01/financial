@@ -30,7 +30,12 @@ class Settings(BaseSettings):
     amap_mcp_url: str = ""
     weather_mcp_url: str = ""
 
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        # .env 里有 compose 专用变量(POSTGRES_PASSWORD/SECRET_KEY 等),
+        # 与 Settings 字段无关,忽略即可,避免本地启动报 extra_forbidden
+        extra="ignore",
+    )
 
 
 settings = Settings()

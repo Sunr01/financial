@@ -217,6 +217,82 @@ tr:hover { background: #f8f9fb; }
 
 .positions-table { margin-top: 16px; }
 
+/* ---- 数据平台：股市行情列表（分页）---- */
+.stock-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+.stock-bar-right { display: flex; gap: 6px; align-items: center; }
+.stock-table { margin-top: 10px; }
+.stock-table th {
+    background: #f6f8fa;
+    color: #57606a;
+    font-weight: 600;
+}
+/* 可排序列头：整格可点、hover 有反馈、激活列高亮 */
+.stock-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+}
+.stock-table th.sortable:hover { background: #eaf2ff; color: #1f6feb; }
+.stock-table th.sortable.sorted { background: #e3edfb; color: #1f6feb; }
+.sort-arrow {
+    font-size: 10px;
+    margin-left: 3px;
+    color: #9aa4b2;      /* 未激活：淡色提示（始终可见） */
+    display: inline-block;
+    min-width: 10px;     /* 占位稳定，避免点击时跳动 */
+}
+th.sortable.sorted .sort-arrow { color: #1f6feb; }
+th.sortable:hover .sort-arrow { color: #1f6feb; }
+.stock-table th, .stock-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #eee;
+    text-align: right;
+    white-space: nowrap;
+    font-size: 13px;
+}
+.stock-table th:first-child, .stock-table td:first-child,
+.stock-table th:nth-child(2), .stock-table td:nth-child(2) { text-align: left; }
+.stock-table tbody tr { cursor: pointer; transition: background 0.15s; }
+.stock-table tbody tr:hover { background: #f0f4ff; }
+.stock-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 12px;
+}
+.stock-pager .btn { margin: 0; }
+.stock-pager .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* 行业分类 chips（横向滚动） */
+.industry-bar {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 8px 0 6px;
+    margin-top: 6px;
+}
+.ind-chip {
+    flex-shrink: 0;
+    padding: 4px 12px;
+    font-size: 12px;
+    border: 1px solid #d0d7de;
+    border-radius: 999px;
+    background: #fff;
+    color: #555;
+    cursor: pointer;
+    transition: all .15s;
+}
+.ind-chip:hover { background: #eaf2ff; color: #1f6feb; border-color: #1f6feb; }
+.ind-chip.active { background: #1f6feb; color: #fff; border-color: #1f6feb; }
+
 /* ---- 数据页 ---- */
 .data-toolbar { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
 .data-toolbar input, .data-toolbar select {
@@ -318,6 +394,28 @@ tr:hover { background: #f8f9fb; }
 }
 .modal-close:hover { color: #333; }
 
+/* 股票详情弹窗（点击行情行弹出） */
+.stock-modal {
+    background: #fff;
+    border-radius: 14px;
+    padding: 20px 24px;
+    width: 92%;
+    max-width: 920px;
+    max-height: 92vh;
+    overflow-y: auto;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.2);
+    position: relative;
+}
+.stock-modal-quote {
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+    margin: 10px 0 8px;
+}
+.stock-modal-quote .q-item { display: flex; flex-direction: column; gap: 2px; }
+.stock-modal-quote .q-label { color: #8b949e; font-size: 12px; }
+.stock-modal-quote .q-value { font-size: 17px; font-weight: 600; color: #24292f; }
+
 /* ---- 首页聊天 ---- */
 .chat-window {
     height: 380px;
@@ -368,6 +466,34 @@ tr:hover { background: #f8f9fb; }
 }
 .chat-input-bar input:focus { border-color: #1f6feb; outline: none; }
 
+/* 推荐策略快捷按钮（输入框下方） */
+.chat-quick-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin-top: 8px;
+}
+.chat-quick-label {
+    font-size: 12px;
+    color: #8b949e;
+    white-space: nowrap;
+}
+.chat-quick-chip {
+    padding: 4px 10px;
+    font-size: 12px;
+    border: 1px solid #d0d7de;
+    border-radius: 999px;
+    background: #fff;
+    color: #1f6feb;
+    cursor: pointer;
+    transition: all .15s;
+}
+.chat-quick-chip:hover {
+    background: #eaf2ff;
+    border-color: #1f6feb;
+}
+
 /* ---- 会话管理 ---- */
 .chat-layout {
     display: flex;
@@ -391,6 +517,38 @@ tr:hover { background: #f8f9fb; }
     font-size: 13px;
     padding: 8px;
 }
+
+/* 侧栏头部：新建对话 + 收起按钮（按钮在侧栏内，跟着侧栏走） */
+.conv-sidebar-head {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+}
+.conv-sidebar-head .conv-new { flex: 1; width: auto; }
+.conv-collapse {
+    flex-shrink: 0;
+    align-self: center;
+}
+
+/* 侧栏收起：隐藏本体，显示展开条 */
+.conv-sidebar.hidden { display: none; }
+.conv-toggle-collapsed {
+    display: none;
+    flex-shrink: 0;
+    width: 30px;
+    align-self: stretch;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: #fff;
+    color: #1f6feb;
+    font-size: 15px;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+.conv-toggle-collapsed:hover { background: #eaf2ff; border-color: #1f6feb; }
+.conv-sidebar.hidden + .conv-toggle-collapsed { display: flex; }
 
 .conv-list {
     flex: 1;
@@ -469,9 +627,9 @@ tr:hover { background: #f8f9fb; }
 }
 
 .chat-main .chat-window {
-    flex: 1;
-    min-height: 0;  /* 允许收缩，撑满中间 */
-    overflow-y: auto;
+    flex: none;          /* 不随内容伸缩 */
+    height: 420px;       /* 固定高度：消息再多也不撑长页面 */
+    overflow-y: auto;    /* 内容多时在框内滚动查看（滚轮） */
 }
 
 .chat-card {
@@ -579,9 +737,9 @@ tr:hover { background: #f8f9fb; }
 }
 
 .home-right .chat-window {
-    flex: 1;          /* 撑满剩余高度，输入框贴底 */
-    height: auto;
-    min-height: 300px;
+    flex: none;       /* 固定高度：消息再多也不撑长页面 */
+    height: 420px;
+    min-height: 0;
 }
 
 .home-right .card h2 { padding-top: 4px; }
